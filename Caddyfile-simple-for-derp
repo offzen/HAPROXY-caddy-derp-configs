@@ -2,6 +2,7 @@
 	# 告诉 Caddy 使用自定义端口进行 HTTP 和 HTTPS 服务
 	http_port 8080
 	https_port 8444
+    admin off
 }
 # ==========================================
 # Caddyfile (严格对齐 Caddy v2 官方手册反向代理规范)
