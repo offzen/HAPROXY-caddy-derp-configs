@@ -1,0 +1,42 @@
+version: '3.8'
+services:
+  derper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: derper-official
+    restart: unless-stopped
+    # 核心：使用宿主机网络模式 (Host Network Mode)
+    # 此模式下不需要再声明 ports 映射，derper 进程会直接占用宿主机的端口
+    network_mode: "host"
+    volumes:
+      # 【最佳实践：使用 Docker 命名卷】
+      # 安全挂载 Caddy 的证书共享卷
+      - caddy_data:/certs_root:ro
+    # 核心改动：使用 sh 脚本作为 entrypoint，优雅破解“证书尚未申请”的启动死锁
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== [Bootstrap] 正在等待 Caddy 自动申请并生成 SSL 证书... ==="
+        # 循环检测证书文件是否存在，避免没有证书时直接闪退
+        while [ ! -f /certs_root/caddy/certificates/acme-v02.api.letsencrypt.org-directory/YOUR-domain.com/YOUR-domain.com.crt ]; do
+          sleep 3
+        done
+        echo "=== [Bootstrap] 证书已就位！正在唤醒 derper 服务... ==="
+        # 使用 exec 替换当前进程，保持容器对信号（如 stop）的正常响应
+        exec /usr/local/bin/derper \
+          -hostname=YOUR-domain.com \
+          -a=:8443 \
+          -http-port=-1 \
+          -stun-port=3478 \
+          -certmode=manual \
+          -certdir=/certs_root/caddy/certificates/acme-v02.api.letsencrypt.org-directory/YOUR-domain.com \
+          -verify-clients=false
+
+volumes:
+  # 声明外部卷，由 Caddy 容器创建和维护
+  caddy_data:
+    external: true
+    # 注意：如果你的 Caddy 部署在 /opt/caddy 目录下，默认生成的卷名是 caddy_caddy_data
+    # 请通过 `docker volume ls` 确认后，在此处填写对应的真实卷名
+    name: caddy_data
