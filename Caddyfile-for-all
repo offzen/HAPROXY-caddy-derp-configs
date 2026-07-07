@@ -1,0 +1,68 @@
+{
+    http_port 8080
+    https_port 8444
+    admin off
+}
+
+# ==========================================
+# 1. 现有的 DERP 证书申请块（保持不动）
+# ==========================================
+la.YOUR-domain.com {
+    tls {
+        issuer acme {
+            email admin@YOUR-domain.com
+            dir https://acme-v02.api.letsencrypt.org/directory
+            disable_tlsalpn_challenge
+        }
+    }
+    respond "" 204
+}
+
+# ==========================================
+# 2. 未来新增网站模版 A：反向代理本地 Docker 应用（最常见）
+#    例如：你要上线一个博客 blog.YOUR-domain.com，后端在本地 127.0.0.1:9000
+# ==========================================
+blog.YOUR-domain.com {
+    # 👈 核心关键 1：所有新域名必须复制这套 TLS 块，强行走 8080 端口验证，防止 443 端口死锁
+    tls {
+        issuer acme {
+            email admin@YOUR-domain.com
+            dir https://acme-v02.api.letsencrypt.org/directory
+            disable_tlsalpn_challenge
+        }
+    }
+
+    # 👈 核心关键 2：开启 Proxy Protocol 支持（可选，配合下方 HAProxy 清理步骤）
+    # 这样可以让 Caddy 穿透 HAProxy，拿到访客的真实公网 IP，而不是 127.0.0.1
+    listener_wrappers {
+        proxy_protocol
+    }
+
+    # 反向代理到你本地的其他 Docker 容器或服务端口
+    reverse_proxy 127.0.0.1:9000 {
+        # 强行把解包后的真实 IP 传给后端应用
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+    }
+}
+
+# ==========================================
+# 3. 未来新增网站模版 B：纯静态 HTML 网页
+# ==========================================
+static.YOUR-domain.com {
+    tls {
+        issuer acme {
+            email admin@YOUR-domain.com
+            dir https://acme-v02.api.letsencrypt.org/directory
+            disable_tlsalpn_challenge
+        }
+    }
+    listener_wrappers {
+        proxy_protocol
+    }
+
+    # 指定静态文件根目录并开启压缩
+    root * /var/www/static_site
+    file_server
+    encode gzip zstd
+}
