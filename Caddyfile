@@ -1,0 +1,29 @@
+{
+	# 告诉 Caddy 使用自定义端口进行 HTTP 和 HTTPS 服务
+	http_port 8080
+	https_port 8444
+}
+# ==========================================
+# Caddyfile (严格对齐 Caddy v2 官方手册反向代理规范)
+# ==========================================
+# 👈 2. 严禁加协议前缀，严禁加 8080 端口！
+# 保持标准域名，从而完美激活 Caddy 内置的 Automatic HTTPS 证书申请状态
+YOUR-domain.com {
+    # 👈 3. 强制 Caddy 针对此域名开启 ACME 流程
+tls {
+        issuer acme {
+            email admin@YOUR-domain.com
+            dir https://acme-v02.api.letsencrypt.org/directory
+            disable_tlsalpn_challenge
+        } 
+    }
+    # 作为验证成功后的响应
+    respond "Caddy ACME Endpoint OK" 200
+}
+
+# ==========================================
+# 2. 你未来的其他普通 Web 服务（需要反代的）
+# ==========================================
+# web.yourdomain.com {
+# reverse_proxy 172.17.0.1:3000
+# }
